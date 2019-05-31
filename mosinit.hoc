@@ -1,0 +1,2 @@
+load_file("nrngui.hoc")
+load_file("step_current_firing_scaling.hoc")

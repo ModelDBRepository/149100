@@ -1,0 +1,35 @@
+//Author: Etay Hay, 2013
+// Preserving axosomatic spiking features despite diverse dendritic morphology (Hay et al., 2013, J.Neurophysiology)
+//
+// Calculate the input resistance and conductance load at the soma or axon
+// $o1: cell object
+// $2: measuring location (0 - soma, 1 - axon)
+obfunc mRho(){ local Rin1,Rin2,Rin_total,gin1,gin_total localobj c1,Rvec
+	c1 = $o1
+	Rvec = new Vector()
+
+	Rin_total = mRin(c1,$2)
+	gin_total = 1/Rin_total
+  
+	if ($2){
+		forsec c1.basal delete_section()
+		forsec c1.somatic delete_section()
+		forsec c1.apical delete_section()
+		c1.myelin delete_section()
+	} else {
+		forsec c1.basal delete_section()
+		forsec c1.axonal delete_section()
+		forsec c1.apical delete_section()
+		c1.myelin delete_section()
+	}	
+
+	Rin1 = mRin(c1,$2) //input resistance due to the section of interest (soma or axon)
+	gin1 = 1/Rin1
+	Rin2 = 1/(gin_total - gin1) //input resistance due to the rest of the cell
+	
+	Rvec.append((gin_total-gin1)/gin1) //conductance load
+	Rvec.append(Rin_total)
+	Rvec.append(Rin1)
+	Rvec.append(Rin2)
+	return (Rvec)  
+}

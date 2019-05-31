@@ -1,0 +1,185 @@
+// Author: Etay Hay, 2013
+// Preserving axosomatic spiking features despite diverse dendritic morphology (Hay et al., 2013, J.Neurophysiology)
+//
+// A simulation of L5 Pyramidal Cell under a prolonged step current, scaling densities based on dendritic load
+
+load_file("nrngui.hoc")
+
+objref cvode
+cvode = new CVode()
+cvode.active(1)
+
+v_init = -75
+
+//utility procedure to make model passive
+//$o1: cell object
+proc make_passive() {
+	forsec $o1.axonal {
+		uninsert Ca_LVAst 
+		uninsert Ca_HVA 
+		uninsert CaDynamics_E2 
+		uninsert SK_E2 
+		uninsert SKv3_1 
+		uninsert K_Tst 
+		uninsert K_Pst 
+		uninsert Nap_Et2 
+		uninsert NaTg
+		uninsert Ih
+	}
+        
+	forsec $o1.somatic {
+		uninsert Ca_LVAst 
+		uninsert Ca_HVA 
+		uninsert CaDynamics_E2 
+		uninsert SK_E2 
+		uninsert SKv3_1 
+		uninsert K_Tst 
+		uninsert K_Pst 
+		uninsert NaTg 
+		uninsert Ih
+	}
+	
+	forsec $o1.apical {
+		uninsert Ih
+	}
+	
+	forsec $o1.basal {
+		uninsert Ih
+	}
+}
+
+//=============================
+
+load_file("import3d.hoc")
+objref L5PC
+strdef morphology_file
+scaleYN = 1 // 1 to apply scaling with conductance load (rho), 0 not to apply scaling
+morphology_file = "morphologies/cell21.asc"
+load_file("models/L5PCbiophys_p14_exemplar.hoc")
+load_file("models/L5PCtemplate.hoc")
+load_file("mRin.hoc")
+load_file("mRho.hoc")
+
+//calculating Rin, Rho_axon and Rho for the exemplar cell
+objref tempvec
+tempvec = new Vector()
+
+L5PC = new L5PCtemplate("morphologies/cell21.asc")
+make_passive(L5PC)
+tempvec = mRho(L5PC,1)
+Rho_axon_exemplar = tempvec.x[0]
+print "Rho_axon of exemplar cell is ",Rho_axon_exemplar
+
+L5PC = new L5PCtemplate("morphologies/cell21.asc")
+make_passive(L5PC)
+tempvec = mRho(L5PC,0)
+Rho_exemplar = tempvec.x[0]
+Rin_exemplar = tempvec.x[1]
+print "Rho of exemplar cell is ",Rho_exemplar
+print "Rin of exemplar cell is ",Rin_exemplar
+
+//calculating Rin, Rho_axon and Rho for the test cell
+L5PC = new L5PCtemplate(morphology_file)
+make_passive(L5PC)
+tempvec = mRho(L5PC,1)
+Rho_axon_test = tempvec.x[0]
+print "Rho_axon of test cell is ",Rho_axon_test
+
+L5PC = new L5PCtemplate(morphology_file)
+make_passive(L5PC)
+tempvec = mRho(L5PC,0)
+Rho_test = tempvec.x[0]
+Rin_test = tempvec.x[1]
+print "Rho of test cell is ",Rho_test
+print "Rin of test cell is ",Rin_test
+
+//==================== Density scaling ===========================
+
+L5PC = new L5PCtemplate(morphology_file)
+
+//Scaling ion channel density with conductance load
+//Note that to maintain the same intracellular calcium dynamics, the gamma of the buffer needs to be scaled inversely with Rho
+if (scaleYN) {
+	scalefactor = (Rho_axon_test/Rho_axon_exemplar)
+} else {
+	scalefactor = 1
+}
+forsec L5PC.axonal{
+	gNaTgbar_NaTg = gNaTgbar_NaTg * scalefactor
+	gNap_Et2bar_Nap_Et2 = gNap_Et2bar_Nap_Et2 * scalefactor
+	gK_Pstbar_K_Pst = gK_Pstbar_K_Pst * scalefactor
+	gK_Tstbar_K_Tst = gK_Tstbar_K_Tst * scalefactor
+	gSKv3_1bar_SKv3_1 = gSKv3_1bar_SKv3_1 * scalefactor
+	gSK_E2bar_SK_E2 = gSK_E2bar_SK_E2 * scalefactor 
+	gCa_HVAbar_Ca_HVA = gCa_HVAbar_Ca_HVA  * scalefactor
+	gCa_LVAstbar_Ca_LVAst = gCa_LVAstbar_Ca_LVAst * scalefactor
+	gamma_CaDynamics_E2 = gamma_CaDynamics_E2 / scalefactor
+}
+
+if (scaleYN) {
+	scalefactor = (Rho_test/Rho_exemplar)
+} else {
+	scalefactor = 1
+}
+	
+forsec L5PC.somatic{
+	gNaTgbar_NaTg = gNaTgbar_NaTg * scalefactor
+	gK_Pstbar_K_Pst = gK_Pstbar_K_Pst * scalefactor
+	gK_Tstbar_K_Tst = gK_Tstbar_K_Tst * scalefactor
+	gSKv3_1bar_SKv3_1 = gSKv3_1bar_SKv3_1 * scalefactor
+	gSK_E2bar_SK_E2 = gSK_E2bar_SK_E2 * scalefactor 
+	gCa_HVAbar_Ca_HVA = gCa_HVAbar_Ca_HVA  * scalefactor
+	gCa_LVAstbar_Ca_LVAst = gCa_LVAstbar_Ca_LVAst * scalefactor
+	gamma_CaDynamics_E2 = gamma_CaDynamics_E2 / scalefactor
+}
+
+//==================== stimulus settings ===========================
+
+tstop = 3000
+
+objref st1,stdc
+
+//step 1: 0.350
+//step 2: 0.610
+//step 3: 1.050
+rinf = Rin_exemplar/Rin_test
+DC_amp = -0.123*rinf
+step_amp = 0.35*rinf
+
+st1 = new IClamp(0.5)
+st1.dur = 2000
+st1.del = 700
+st1.amp = step_amp - DC_amp
+
+stdc = new IClamp(0.5)
+stdc.dur = tstop
+stdc.del = 0
+stdc.amp = DC_amp
+
+L5PC.soma st1
+
+//==================== recording settings ==========================
+objref vvec, tvec
+
+vvec = new Vector()
+tvec = new Vector()
+
+access L5PC.soma
+cvode.record(&v(0.5),vvec,tvec)
+
+//======================= plot settings ============================
+
+objref gV
+
+gV = new Graph()
+gV.size(0,tstop,-80,40)
+graphList[0].append(gV)
+access L5PC.soma
+gV.addvar("soma","v(0.5)",1,1)
+
+//============================= simulation ================================
+
+init()
+run()
+
+

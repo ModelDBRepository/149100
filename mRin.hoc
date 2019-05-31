@@ -1,0 +1,34 @@
+//Author: Etay Hay, 2013
+// Preserving axosomatic spiking features despite diverse dendritic morphology (Hay et al., 2013, J.Neurophysiology)
+//
+// Measuring input resistance at soma or axon initial segment
+// $o1: cell object
+// $2: measuring location (0 - soma, 1 - axon)
+func mRin(){ localobj c1,vvec,tvec,st1
+  vvec = new Vector()
+  tvec = new Vector()
+  tstop = 10000
+  c1 = $o1
+  
+	if ($2){
+	  access c1.axon
+	  st1 = new IClamp(0.5)
+	  st1.del = tstop/2
+	  st1.dur = 1000
+	  st1.amp = 0.00005
+	  cvode.record(&v(0.5),vvec,tvec)
+	} else {
+	  access c1.soma
+	  st1 = new IClamp(0.5)
+	  st1.del = tstop/2
+	  st1.dur = 1000
+	  st1.amp = 0.00005
+	  cvode.record(&v(0.5),vvec,tvec)
+	}
+
+//============================= simulation ================================
+  init()
+  run()
+
+  return ((vvec.x[tvec.indwhere(">=",st1.del+0.999*st1.dur)] - vvec.x[tvec.indwhere(">=",st1.del-0.5*st1.dur)])/st1.amp)  
+}
